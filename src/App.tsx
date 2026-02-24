@@ -12,6 +12,7 @@ import MyList from "./pages/MyList";
 import NotFound from "./pages/NotFound";
 import DevProfile from "./pages/DevProfile";
 import UserProfile from "./pages/UserProfile";
+import MovieFeed from "./pages/MovieFeed";
 
 const queryClient = new QueryClient();
 
@@ -30,6 +31,7 @@ const App = () => (
             <Route path="/my-list" element={<MyList />} />
             <Route path="/dev-profile" element={<DevProfile />} />
             <Route path="/user/:userId" element={<UserProfile />} />
+            <Route path="/feed" element={<MovieFeed />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
