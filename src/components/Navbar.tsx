@@ -1,4 +1,4 @@
-import { Search, User, Flame } from "lucide-react";
+import { Search, User } from "lucide-react";
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import SearchOverlay from "@/components/SearchOverlay";
@@ -44,14 +44,7 @@ const Navbar = () => {
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => navigate("/feed")}
-            className="p-2 rounded-full hover:bg-secondary transition-colors relative group"
-            title="Recomendaciones"
-          >
-            <Flame className="w-5 h-5 text-orange-400 group-hover:scale-110 transition-transform" />
-          </button>
+        <div className="flex items-center gap-4">
           <button onClick={() => setSearchOpen(true)} className="p-2 rounded-full hover:bg-secondary transition-colors">
             <Search className="w-5 h-5 text-muted-foreground" />
           </button>

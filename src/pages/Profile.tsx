@@ -15,7 +15,6 @@ import movieData, { heroMovie } from "@/data/movies";
 import UserSearchModal from "@/components/UserSearchModal";
 import ProfileRequestsContent from "@/components/ProfileRequestsContent";
 import ProfileChatsContent from "@/components/ProfileChatsContent";
-import ProfileStreakCard from "@/components/ProfileStreakCard";
 
 type TabKey = "mylist" | "security" | "requests" | "chats";
 
@@ -305,8 +304,7 @@ const Profile = () => {
           </AnimatePresence>
         </motion.div>
 
-        {/* Streak Card */}
-        <ProfileStreakCard streak={8} />
+        {/* Search Modal */}
 
         {/* Search Modal */}
         <UserSearchModal open={showUserSearch} onClose={() => setShowUserSearch(false)} />
