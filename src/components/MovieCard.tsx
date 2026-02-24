@@ -1,4 +1,4 @@
-import { Play, Star, Heart, Eye, Flag } from "lucide-react";
+import { Play, Star, Heart, Eye, Flag, Share2 } from "lucide-react";
 import { Movie } from "@/data/movies";
 import { useState } from "react";
 import { useMovieLists } from "@/contexts/MovieListsContext";
@@ -60,6 +60,21 @@ const MovieCard = ({ movie, index }: MovieCardProps) => {
                 title={seen ? "Marcar como no visto" : "Marcar como visto"}
               >
                 <Eye className="w-4 h-4" />
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (navigator.share) {
+                    navigator.share({
+                      title: movie.title,
+                      text: `🎬 ¡Mira "${movie.title}"! ⭐ ${movie.rating} — ${movie.description}`,
+                    });
+                  }
+                }}
+                className="w-8 h-8 rounded-full border border-border bg-secondary text-foreground flex items-center justify-center hover:bg-primary/10 hover:text-primary hover:border-primary/30 transition-colors"
+                title="Compartir película"
+              >
+                <Share2 className="w-4 h-4" />
               </button>
               <button
                 onClick={(e) => { e.stopPropagation(); setReportOpen(true); }}
