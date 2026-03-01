@@ -1,12 +1,14 @@
-import { Search, User } from "lucide-react";
-import { useState, useEffect, useCallback } from "react";
+import { Search, User, LogOut, Shield } from "lucide-react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import SearchOverlay from "@/components/SearchOverlay";
+import { useAuth } from "@/hooks/useAuth";
 
 const Navbar = () => {
   const navigate = useNavigate();
   const [scrolled, setScrolled] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  const { user, profile, isAdmin, signOut } = useAuth();
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 50);
@@ -44,13 +46,33 @@ const Navbar = () => {
           </div>
         </div>
 
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3">
           <button onClick={() => setSearchOpen(true)} className="p-2 rounded-full hover:bg-secondary transition-colors">
             <Search className="w-5 h-5 text-muted-foreground" />
           </button>
-          <button onClick={() => navigate("/profile")} className="w-8 h-8 rounded-full bg-primary flex items-center justify-center">
-            <User className="w-4 h-4 text-primary-foreground" />
-          </button>
+          {user && isAdmin && (
+            <button onClick={() => navigate("/admin")} className="p-2 rounded-full hover:bg-secondary transition-colors" title="Admin">
+              <Shield className="w-5 h-5 text-primary" />
+            </button>
+          )}
+          {user ? (
+            <div className="flex items-center gap-2">
+              <button onClick={() => navigate("/profile")} className="w-8 h-8 rounded-full bg-primary flex items-center justify-center overflow-hidden">
+                {profile?.avatar_url ? (
+                  <img src={profile.avatar_url} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  <User className="w-4 h-4 text-primary-foreground" />
+                )}
+              </button>
+              <button onClick={signOut} className="p-2 rounded-full hover:bg-secondary transition-colors" title="Cerrar sesión">
+                <LogOut className="w-4 h-4 text-muted-foreground" />
+              </button>
+            </div>
+          ) : (
+            <button onClick={() => navigate("/auth")} className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors">
+              Entrar
+            </button>
+          )}
         </div>
       </nav>
 
