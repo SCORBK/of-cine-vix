@@ -1,26 +1,20 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Search, Ban, ShieldCheck, User, MoreVertical, Eye } from "lucide-react";
+import { Search, Ban, ShieldCheck, User, Eye } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
 
 interface ManagedUser {
   id: string;
-  name: string;
-  username: string;
-  avatar: string;
-  email: string;
-  status: "active" | "warned" | "blocked";
-  joinDate: string;
-  reports: number;
+  user_id: string;
+  display_name: string | null;
+  username: string | null;
+  avatar_url: string | null;
+  created_at: string;
+  reportCount: number;
 }
-
-const mockManagedUsers: ManagedUser[] = [
-  { id: "u1", name: "Carlos Méndez", username: "@carlosm", avatar: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=80&h=80&fit=crop", email: "carlos@email.com", status: "active", joinDate: "Ene 2024", reports: 0 },
-  { id: "u2", name: "Ana García", username: "@anagarcia", avatar: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=80&h=80&fit=crop", email: "ana@email.com", status: "warned", joinDate: "Feb 2024", reports: 2 },
-  { id: "u3", name: "Diego López", username: "@diegolopez", avatar: "https://images.unsplash.com/photo-1527980965255-d3b416303d12?w=80&h=80&fit=crop", email: "diego@email.com", status: "active", joinDate: "Mar 2024", reports: 0 },
-  { id: "u4", name: "Laura Ruiz", username: "@lauraruiz", avatar: "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=80&h=80&fit=crop", email: "laura@email.com", status: "blocked", joinDate: "Ene 2024", reports: 5 },
-];
 
 const statusStyles: Record<string, { label: string; bg: string; text: string; border: string }> = {
   active: { label: "Activo", bg: "bg-accent/10", text: "text-accent", border: "border-accent/20" },
@@ -29,47 +23,71 @@ const statusStyles: Record<string, { label: string; bg: string; text: string; bo
 };
 
 const AdminUsersTab = () => {
+  const { toast } = useToast();
   const [searchQuery, setSearchQuery] = useState("");
-  const [users, setUsers] = useState(mockManagedUsers);
+  const [users, setUsers] = useState<ManagedUser[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchUsers = async () => {
+    setLoading(true);
+    const { data: profiles } = await supabase
+      .from("profiles")
+      .select("id, user_id, display_name, username, avatar_url, created_at");
+
+    if (profiles) {
+      // Get report counts per user
+      const { data: reports } = await supabase
+        .from("reports")
+        .select("reported_user_id");
+
+      const reportCounts = new Map<string, number>();
+      (reports || []).forEach((r: any) => {
+        if (r.reported_user_id) {
+          reportCounts.set(r.reported_user_id, (reportCounts.get(r.reported_user_id) || 0) + 1);
+        }
+      });
+
+      setUsers(
+        profiles.map((p: any) => ({
+          ...p,
+          reportCount: reportCounts.get(p.user_id) || 0,
+        }))
+      );
+    }
+    setLoading(false);
+  };
+
+  useEffect(() => { fetchUsers(); }, []);
 
   const filtered = searchQuery.trim()
-    ? users.filter((u) => u.name.toLowerCase().includes(searchQuery.toLowerCase()) || u.username.toLowerCase().includes(searchQuery.toLowerCase()))
+    ? users.filter((u) =>
+        u.display_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        u.username?.toLowerCase().includes(searchQuery.toLowerCase())
+      )
     : users;
-
-  const handleBlock = (id: string) => {
-    setUsers((prev) => prev.map((u) => u.id === id ? { ...u, status: u.status === "blocked" ? "active" as const : "blocked" as const } : u));
-  };
-
-  const handleWarn = (id: string) => {
-    setUsers((prev) => prev.map((u) => u.id === id ? { ...u, status: "warned" as const } : u));
-  };
 
   return (
     <div className="space-y-6">
       {/* Summary */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        {[
-          { label: "Activos", count: users.filter((u) => u.status === "active").length, icon: User, style: statusStyles.active },
-          { label: "Advertidos", count: users.filter((u) => u.status === "warned").length, icon: ShieldCheck, style: statusStyles.warned },
-          { label: "Bloqueados", count: users.filter((u) => u.status === "blocked").length, icon: Ban, style: statusStyles.blocked },
-        ].map((item, i) => {
-          const Icon = item.icon;
-          return (
-            <motion.div
-              key={item.label}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.06 }}
-              className={`rounded-xl border ${item.style.border} ${item.style.bg} p-4 flex items-center gap-3`}
-            >
-              <Icon className={`w-5 h-5 ${item.style.text}`} />
-              <div>
-                <p className={`text-xl font-bold ${item.style.text}`}>{item.count}</p>
-                <p className="text-xs text-muted-foreground">{item.label}</p>
-              </div>
-            </motion.div>
-          );
-        })}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+          className="rounded-xl border border-accent/20 bg-accent/10 p-4 flex items-center gap-3"
+        >
+          <User className="w-5 h-5 text-accent" />
+          <div>
+            <p className="text-xl font-bold text-accent">{users.length}</p>
+            <p className="text-xs text-muted-foreground">Usuarios registrados</p>
+          </div>
+        </motion.div>
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.06 }}
+          className="rounded-xl border border-primary/20 bg-primary/10 p-4 flex items-center gap-3"
+        >
+          <ShieldCheck className="w-5 h-5 text-primary" />
+          <div>
+            <p className="text-xl font-bold text-primary">{users.filter(u => u.reportCount > 0).length}</p>
+            <p className="text-xs text-muted-foreground">Con reportes</p>
+          </div>
+        </motion.div>
       </div>
 
       {/* Search */}
@@ -78,48 +96,42 @@ const AdminUsersTab = () => {
         <Input value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Buscar usuarios..." className="pl-10 bg-secondary/50 border-border/50" />
       </div>
 
-      {/* User list */}
-      <div className="space-y-3">
-        {filtered.map((user, i) => {
-          const style = statusStyles[user.status];
-          return (
+      {loading ? (
+        <p className="text-sm text-muted-foreground text-center py-8">Cargando usuarios...</p>
+      ) : filtered.length === 0 ? (
+        <div className="rounded-xl border border-border/50 bg-card/60 p-8 text-center">
+          <User className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
+          <p className="text-sm text-muted-foreground">No se encontraron usuarios</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {filtered.map((user, i) => (
             <motion.div
               key={user.id}
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.05 }}
+              transition={{ delay: i * 0.03 }}
               className="rounded-xl border border-border/50 bg-card/60 backdrop-blur-sm overflow-hidden"
             >
               <div className="px-5 py-4 flex items-center gap-4">
-                <img src={user.avatar} alt={user.name} className="w-10 h-10 rounded-full object-cover border-2 border-border" />
+                <img
+                  src={user.avatar_url || `https://ui-avatars.com/api/?name=${user.display_name || "U"}&background=random`}
+                  alt={user.display_name || ""} className="w-10 h-10 rounded-full object-cover border-2 border-border"
+                />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <p className="text-sm font-semibold text-foreground">{user.name}</p>
-                    <span className="text-xs text-muted-foreground">{user.username}</span>
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium ${style.bg} ${style.text} border ${style.border}`}>
-                      {style.label}
-                    </span>
+                    <p className="text-sm font-semibold text-foreground">{user.display_name || "Sin nombre"}</p>
+                    <span className="text-xs text-muted-foreground">@{user.username || "desconocido"}</span>
                   </div>
-                  <p className="text-xs text-muted-foreground mt-0.5">{user.email} · Desde {user.joinDate} · {user.reports} reportes</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Desde {new Date(user.created_at).toLocaleDateString("es-MX", { month: "short", year: "numeric" })} · {user.reportCount} reportes
+                  </p>
                 </div>
               </div>
-              <div className="px-5 py-3 border-t border-border/30 flex items-center gap-2">
-                <Button variant="ghost" size="sm" className="text-xs gap-1 text-muted-foreground hover:text-primary">
-                  <Eye className="w-3 h-3" /> Ver perfil
-                </Button>
-                {user.status !== "warned" && user.status !== "blocked" && (
-                  <Button variant="ghost" size="sm" className="text-xs gap-1 text-muted-foreground hover:text-primary" onClick={() => handleWarn(user.id)}>
-                    <ShieldCheck className="w-3 h-3" /> Advertir
-                  </Button>
-                )}
-                <Button variant="ghost" size="sm" className="text-xs gap-1 text-muted-foreground hover:text-destructive ml-auto" onClick={() => handleBlock(user.id)}>
-                  <Ban className="w-3 h-3" /> {user.status === "blocked" ? "Desbloquear" : "Bloquear"}
-                </Button>
-              </div>
             </motion.div>
-          );
-        })}
-      </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 };

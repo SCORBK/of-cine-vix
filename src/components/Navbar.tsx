@@ -8,7 +8,7 @@ const Navbar = () => {
   const navigate = useNavigate();
   const [scrolled, setScrolled] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
-  const { user, profile, isAdmin, signOut } = useAuth();
+  const { user, profile, isAdmin, hasRole, signOut } = useAuth();
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 50);
@@ -50,7 +50,7 @@ const Navbar = () => {
           <button onClick={() => setSearchOpen(true)} className="p-2 rounded-full hover:bg-secondary transition-colors">
             <Search className="w-5 h-5 text-muted-foreground" />
           </button>
-          {user && isAdmin && (
+          {user && (isAdmin || hasRole("support") || hasRole("moderator")) && (
             <button onClick={() => navigate("/admin")} className="p-2 rounded-full hover:bg-secondary transition-colors" title="Admin">
               <Shield className="w-5 h-5 text-primary" />
             </button>
