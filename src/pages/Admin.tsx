@@ -1,9 +1,9 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import {
-  ArrowLeft, Image, Film, Upload, Plus, Trash2, Users,
-  LayoutDashboard, ImagePlus, Flag, Palette, MessageCircle, Shield, UserCheck
+  ArrowLeft, Film, Users,
+  LayoutDashboard, Flag, Palette, MessageCircle, Shield, UserCheck
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import AdminReportsTab from "@/components/AdminReportsTab";
@@ -13,6 +13,7 @@ import AdminUsersTab from "@/components/AdminUsersTab";
 import AdminRolesTab from "@/components/AdminRolesTab";
 import AdminFollowersTab from "@/components/AdminFollowersTab";
 import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/integrations/supabase/client";
 
 type AdminTab = "dashboard" | "reports" | "chats" | "users" | "roles" | "followers" | "customize";
 
@@ -35,6 +36,19 @@ const Admin = () => {
   const navigate = useNavigate();
   const { isAdmin, hasRole, loading } = useAuth();
   const [activeTab, setActiveTab] = useState<AdminTab>("dashboard");
+  const [stats, setStats] = useState({ users: 0, reports: 0, movies: 0 });
+
+  useEffect(() => {
+    const fetchStats = async () => {
+      const [{ count: usersCount }, { count: reportsCount }, { count: moviesCount }] = await Promise.all([
+        supabase.from("profiles").select("*", { count: "exact", head: true }),
+        supabase.from("reports").select("*", { count: "exact", head: true }),
+        supabase.from("movies").select("*", { count: "exact", head: true }),
+      ]);
+      setStats({ users: usersCount || 0, reports: reportsCount || 0, movies: moviesCount || 0 });
+    };
+    fetchStats();
+  }, []);
 
   if (loading) {
     return <div className="min-h-screen bg-background flex items-center justify-center"><p className="text-muted-foreground">Cargando...</p></div>;
@@ -100,9 +114,9 @@ const Admin = () => {
             <motion.div key="dashboard" initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}
               className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
             >
-              <StatCard index={0} icon={Users} label="Usuarios" value="—" color="primary" />
-              <StatCard index={1} icon={Flag} label="Reportes" value="—" color="accent" />
-              <StatCard index={2} icon={Film} label="Películas" value="—" color="primary" />
+              <StatCard index={0} icon={Users} label="Usuarios" value={String(stats.users)} color="primary" />
+              <StatCard index={1} icon={Flag} label="Reportes" value={String(stats.reports)} color="accent" />
+              <StatCard index={2} icon={Film} label="Películas" value={String(stats.movies)} color="primary" />
             </motion.div>
           )}
 
