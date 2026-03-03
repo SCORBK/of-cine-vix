@@ -1,51 +1,61 @@
 import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 
 interface MovieListsContextType {
-  favorites: number[];
-  watched: number[];
-  toggleFavorite: (movieId: number) => void;
-  toggleWatched: (movieId: number) => void;
-  isFavorite: (movieId: number) => boolean;
-  isWatched: (movieId: number) => boolean;
+  favorites: string[];
+  watched: string[];
+  toggleFavorite: (movieId: string) => void;
+  toggleWatched: (movieId: string) => void;
+  isFavorite: (movieId: string) => boolean;
+  isWatched: (movieId: string) => boolean;
 }
 
 const MovieListsContext = createContext<MovieListsContextType | null>(null);
 
-function loadFromStorage(key: string): number[] {
-  try {
-    const stored = localStorage.getItem(key);
-    return stored ? JSON.parse(stored) : [];
-  } catch {
-    return [];
-  }
-}
-
 export function MovieListsProvider({ children }: { children: ReactNode }) {
-  const [favorites, setFavorites] = useState<number[]>(() => loadFromStorage("velora_favorites"));
-  const [watched, setWatched] = useState<number[]>(() => loadFromStorage("velora_watched"));
+  const { user } = useAuth();
+  const [favorites, setFavorites] = useState<string[]>([]);
+  const [watched, setWatched] = useState<string[]>([]);
 
-  useEffect(() => {
-    localStorage.setItem("velora_favorites", JSON.stringify(favorites));
-  }, [favorites]);
+  const fetchLists = useCallback(async () => {
+    if (!user) { setFavorites([]); setWatched([]); return; }
+    const { data } = await supabase
+      .from("user_movie_lists")
+      .select("movie_id, list_type")
+      .eq("user_id", user.id);
+    if (data) {
+      setFavorites(data.filter(d => d.list_type === "favorite").map(d => d.movie_id));
+      setWatched(data.filter(d => d.list_type === "watched").map(d => d.movie_id));
+    }
+  }, [user]);
 
-  useEffect(() => {
-    localStorage.setItem("velora_watched", JSON.stringify(watched));
-  }, [watched]);
+  useEffect(() => { fetchLists(); }, [fetchLists]);
 
-  const toggleFavorite = useCallback((movieId: number) => {
-    setFavorites((prev) =>
-      prev.includes(movieId) ? prev.filter((id) => id !== movieId) : [...prev, movieId]
-    );
-  }, []);
+  const toggleFavorite = useCallback(async (movieId: string) => {
+    if (!user) return;
+    if (favorites.includes(movieId)) {
+      await supabase.from("user_movie_lists").delete().eq("user_id", user.id).eq("movie_id", movieId).eq("list_type", "favorite");
+      setFavorites(prev => prev.filter(id => id !== movieId));
+    } else {
+      await supabase.from("user_movie_lists").insert({ user_id: user.id, movie_id: movieId, list_type: "favorite" });
+      setFavorites(prev => [...prev, movieId]);
+    }
+  }, [user, favorites]);
 
-  const toggleWatched = useCallback((movieId: number) => {
-    setWatched((prev) =>
-      prev.includes(movieId) ? prev.filter((id) => id !== movieId) : [...prev, movieId]
-    );
-  }, []);
+  const toggleWatched = useCallback(async (movieId: string) => {
+    if (!user) return;
+    if (watched.includes(movieId)) {
+      await supabase.from("user_movie_lists").delete().eq("user_id", user.id).eq("movie_id", movieId).eq("list_type", "watched");
+      setWatched(prev => prev.filter(id => id !== movieId));
+    } else {
+      await supabase.from("user_movie_lists").insert({ user_id: user.id, movie_id: movieId, list_type: "watched" });
+      setWatched(prev => [...prev, movieId]);
+    }
+  }, [user, watched]);
 
-  const isFavorite = useCallback((movieId: number) => favorites.includes(movieId), [favorites]);
-  const isWatched = useCallback((movieId: number) => watched.includes(movieId), [watched]);
+  const isFavorite = useCallback((movieId: string) => favorites.includes(movieId), [favorites]);
+  const isWatched = useCallback((movieId: string) => watched.includes(movieId), [watched]);
 
   return (
     <MovieListsContext.Provider value={{ favorites, watched, toggleFavorite, toggleWatched, isFavorite, isWatched }}>

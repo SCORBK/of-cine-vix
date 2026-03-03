@@ -2,13 +2,19 @@ import Navbar from "@/components/Navbar";
 import HeroBanner from "@/components/HeroBanner";
 import MovieRow from "@/components/MovieRow";
 import SupportChat from "@/components/SupportChat";
-import { categories } from "@/data/movies";
+import { useMovies } from "@/hooks/useMovies";
 
 const Index = () => {
+  const { heroMovie, categories, loading } = useMovies();
+
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
-      <HeroBanner />
+      {heroMovie ? <HeroBanner movie={heroMovie} /> : (
+        <div className="h-[85vh] min-h-[500px] flex items-center justify-center">
+          <p className="text-muted-foreground">{loading ? "Cargando..." : "Agrega películas desde el panel admin"}</p>
+        </div>
+      )}
       <div className="-mt-16 relative z-10 pt-4">
         {categories.map((cat) => (
           <MovieRow key={cat.name} title={cat.name} movies={cat.movies} />
