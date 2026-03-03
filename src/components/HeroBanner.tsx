@@ -1,15 +1,18 @@
 import { Play, Plus, Star } from "lucide-react";
-import { heroMovie } from "@/data/movies";
+import type { DbMovie } from "@/types/movie";
 
-const HeroBanner = () => {
+interface HeroBannerProps {
+  movie: DbMovie;
+}
+
+const HeroBanner = ({ movie }: HeroBannerProps) => {
   return (
     <section className="relative w-full h-[85vh] min-h-[500px] overflow-hidden">
-      <img
-        src={heroMovie.image}
-        alt={heroMovie.title}
-        className="absolute inset-0 w-full h-full object-cover"
-      />
-      {/* Gradient overlays */}
+      {movie.image_url ? (
+        <img src={movie.image_url} alt={movie.title} className="absolute inset-0 w-full h-full object-cover" />
+      ) : (
+        <div className="absolute inset-0 bg-gradient-to-br from-primary/20 to-background" />
+      )}
       <div className="absolute inset-0 bg-gradient-to-t from-background via-background/40 to-transparent" />
       <div className="absolute inset-0 bg-gradient-to-r from-background/80 via-transparent to-transparent" />
 
@@ -19,27 +22,33 @@ const HeroBanner = () => {
             <span className="px-3 py-1 rounded-full bg-primary text-primary-foreground text-xs font-bold uppercase tracking-wider">
               Estreno
             </span>
-            <div className="flex items-center gap-1">
-              <Star className="w-4 h-4 text-accent fill-accent" />
-              <span className="text-sm font-semibold text-accent">{heroMovie.rating}</span>
-            </div>
+            {movie.rating && (
+              <div className="flex items-center gap-1">
+                <Star className="w-4 h-4 text-accent fill-accent" />
+                <span className="text-sm font-semibold text-accent">{movie.rating}</span>
+              </div>
+            )}
           </div>
 
           <h2 className="text-4xl md:text-6xl font-extrabold leading-tight mb-3 tracking-tight text-foreground">
-            {heroMovie.title}
+            {movie.title}
           </h2>
 
           <div className="flex items-center gap-3 text-sm text-muted-foreground mb-4">
-            <span>{heroMovie.year}</span>
-            <span className="w-1 h-1 rounded-full bg-muted-foreground" />
-            <span>{heroMovie.genre}</span>
-            <span className="w-1 h-1 rounded-full bg-muted-foreground" />
-            <span>{heroMovie.duration}</span>
+            {movie.year && <span>{movie.year}</span>}
+            {movie.genre && (
+              <>
+                <span className="w-1 h-1 rounded-full bg-muted-foreground" />
+                <span>{movie.genre}</span>
+              </>
+            )}
           </div>
 
-          <p className="text-base md:text-lg text-muted-foreground leading-relaxed mb-8 max-w-xl">
-            {heroMovie.description}
-          </p>
+          {movie.description && (
+            <p className="text-base md:text-lg text-muted-foreground leading-relaxed mb-8 max-w-xl">
+              {movie.description}
+            </p>
+          )}
 
           <div className="flex items-center gap-4">
             <button className="flex items-center gap-2 px-8 py-3 rounded-lg bg-primary text-primary-foreground font-bold text-base hover:bg-primary/90 transition-all hover:scale-105 active:scale-95 shadow-lg shadow-primary/30">

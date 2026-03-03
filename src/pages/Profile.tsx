@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { useMovieLists } from "@/contexts/MovieListsContext";
 import MovieCard from "@/components/MovieCard";
-import movieData, { heroMovie } from "@/data/movies";
+import type { DbMovie } from "@/types/movie";
 import UserSearchModal from "@/components/UserSearchModal";
 import ProfileRequestsContent from "@/components/ProfileRequestsContent";
 import ProfileChatsContent from "@/components/ProfileChatsContent";
@@ -36,7 +36,7 @@ const fadeUp = {
   }),
 };
 
-const allMovies = [heroMovie, ...movieData];
+
 
 const Profile = () => {
   const navigate = useNavigate();
@@ -117,21 +117,39 @@ const Profile = () => {
   const handleCoverUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !user) return;
-    const url = URL.createObjectURL(file);
-    await supabase.from("profiles").update({ cover_url: url }).eq("user_id", user.id);
+    const ext = file.name.split(".").pop();
+    const path = `${user.id}/cover.${ext}`;
+    const { error: uploadErr } = await supabase.storage.from("user-uploads").upload(path, file, { upsert: true });
+    if (uploadErr) { toast({ title: "Error", description: uploadErr.message, variant: "destructive" }); return; }
+    const { data: { publicUrl } } = supabase.storage.from("user-uploads").getPublicUrl(path);
+    await supabase.from("profiles").update({ cover_url: publicUrl }).eq("user_id", user.id);
     refreshProfile();
   };
 
   const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !user) return;
-    const url = URL.createObjectURL(file);
-    await supabase.from("profiles").update({ avatar_url: url }).eq("user_id", user.id);
+    const ext = file.name.split(".").pop();
+    const path = `${user.id}/avatar.${ext}`;
+    const { error: uploadErr } = await supabase.storage.from("user-uploads").upload(path, file, { upsert: true });
+    if (uploadErr) { toast({ title: "Error", description: uploadErr.message, variant: "destructive" }); return; }
+    const { data: { publicUrl } } = supabase.storage.from("user-uploads").getPublicUrl(path);
+    await supabase.from("profiles").update({ avatar_url: publicUrl }).eq("user_id", user.id);
     refreshProfile();
   };
 
-  const favoriteMovies = allMovies.filter((m) => favorites.includes(m.id));
-  const watchedMovies = allMovies.filter((m) => watched.includes(m.id));
+  const [favoriteMovies, setFavoriteMovies] = useState<DbMovie[]>([]);
+  const [watchedMovies, setWatchedMovies] = useState<DbMovie[]>([]);
+
+  useEffect(() => {
+    const fetchMovies = async (ids: string[], setter: (m: DbMovie[]) => void) => {
+      if (ids.length === 0) { setter([]); return; }
+      const { data } = await supabase.from("movies").select("*").in("id", ids);
+      setter((data as DbMovie[]) || []);
+    };
+    fetchMovies(favorites, setFavoriteMovies);
+    fetchMovies(watched, setWatchedMovies);
+  }, [favorites, watched]);
 
   if (!user || !profile) {
     return <div className="min-h-screen bg-background flex items-center justify-center"><p className="text-muted-foreground">Cargando perfil...</p></div>;

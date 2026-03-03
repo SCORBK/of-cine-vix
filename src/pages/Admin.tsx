@@ -12,13 +12,15 @@ import AdminChatsTab from "@/components/AdminChatsTab";
 import AdminUsersTab from "@/components/AdminUsersTab";
 import AdminRolesTab from "@/components/AdminRolesTab";
 import AdminFollowersTab from "@/components/AdminFollowersTab";
+import AdminMoviesTab from "@/components/AdminMoviesTab";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 
-type AdminTab = "dashboard" | "reports" | "chats" | "users" | "roles" | "followers" | "customize";
+type AdminTab = "dashboard" | "reports" | "chats" | "users" | "roles" | "followers" | "customize" | "movies";
 
 const adminTabs: { key: AdminTab; label: string; icon: React.ElementType }[] = [
   { key: "dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { key: "movies", label: "Películas", icon: Film },
   { key: "reports", label: "Reportes", icon: Flag },
   { key: "chats", label: "Chats", icon: MessageCircle },
   { key: "users", label: "Usuarios", icon: Users },
@@ -153,6 +155,12 @@ const Admin = () => {
           {activeTab === "followers" && (
             <motion.div key="followers" initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
               <AdminFollowersTab />
+            </motion.div>
+          )}
+
+          {activeTab === "movies" && (
+            <motion.div key="movies" initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
+              <AdminMoviesTab />
             </motion.div>
           )}
         </AnimatePresence>

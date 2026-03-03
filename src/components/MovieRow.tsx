@@ -1,11 +1,11 @@
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useRef, useState } from "react";
 import MovieCard from "./MovieCard";
-import { Movie } from "@/data/movies";
+import type { DbMovie } from "@/types/movie";
 
 interface MovieRowProps {
   title: string;
-  movies: Movie[];
+  movies: DbMovie[];
 }
 
 const MovieRow = ({ title, movies }: MovieRowProps) => {
