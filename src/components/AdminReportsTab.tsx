@@ -1,8 +1,10 @@
-import { useState, useEffect } from "react";
-import { motion } from "framer-motion";
-import { CheckCircle2, Clock, AlertTriangle, MessageCircle, Film } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { CheckCircle2, Clock, AlertTriangle, MessageCircle, ArrowLeft, Send, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 
 const fadeIn = {
@@ -19,9 +21,14 @@ const statusConfig: Record<TicketStatus, { label: string; icon: React.ElementTyp
 };
 
 const AdminReportsTab = () => {
+  const { user } = useAuth();
   const { toast } = useToast();
   const [reports, setReports] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [activeChat, setActiveChat] = useState<any>(null);
+  const [chatMessages, setChatMessages] = useState<any[]>([]);
+  const [newMessage, setNewMessage] = useState("");
+  const bottomRef = useRef<HTMLDivElement>(null);
 
   const fetchReports = async () => {
     setLoading(true);
@@ -34,7 +41,7 @@ const AdminReportsTab = () => {
       const userIds = [...new Set(data.map((r: any) => r.reporter_id))];
       const { data: profiles } = await supabase
         .from("profiles")
-        .select("user_id, display_name, avatar_url")
+        .select("user_id, display_name, avatar_url, username")
         .in("user_id", userIds);
 
       const profileMap = new Map((profiles || []).map((p: any) => [p.user_id, p]));
@@ -53,11 +60,133 @@ const AdminReportsTab = () => {
     fetchReports();
   };
 
+  const openChat = async (report: any) => {
+    setActiveChat(report);
+    const { data } = await supabase
+      .from("support_messages")
+      .select("*")
+      .eq("report_id", report.id)
+      .order("created_at", { ascending: true });
+    setChatMessages(data || []);
+    setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
+  };
+
+  const sendMessage = async () => {
+    if (!newMessage.trim() || !user || !activeChat) return;
+    const { data: msg } = await supabase
+      .from("support_messages")
+      .insert({ report_id: activeChat.id, sender_id: user.id, message: newMessage.trim() })
+      .select()
+      .single();
+    if (msg) {
+      setChatMessages(prev => [...prev, msg]);
+      setNewMessage("");
+      setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
+    }
+  };
+
+  const resolveAndDelete = async (reportId: string) => {
+    // Delete support messages
+    await supabase.from("support_messages").delete().eq("report_id", reportId);
+    // Delete the report
+    await supabase.from("reports").delete().eq("id", reportId);
+    toast({ title: "Reporte resuelto y eliminado" });
+    setActiveChat(null);
+    setChatMessages([]);
+    fetchReports();
+  };
+
+  // Realtime for support messages
+  useEffect(() => {
+    if (!activeChat) return;
+    const channel = supabase
+      .channel(`admin-support-${activeChat.id}`)
+      .on("postgres_changes", {
+        event: "INSERT",
+        schema: "public",
+        table: "support_messages",
+        filter: `report_id=eq.${activeChat.id}`,
+      }, (payload) => {
+        const msg = payload.new as any;
+        setChatMessages(prev => {
+          if (prev.some(m => m.id === msg.id)) return prev;
+          return [...prev, msg];
+        });
+        setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [activeChat]);
+
   const counts = {
     pending: reports.filter(r => r.status === "pending").length,
     in_progress: reports.filter(r => r.status === "in_progress").length,
     resolved: reports.filter(r => r.status === "resolved").length,
   };
+
+  // Chat view
+  if (activeChat) {
+    return (
+      <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }}
+        className="rounded-xl border border-border/50 bg-card/60 backdrop-blur-sm overflow-hidden flex flex-col"
+        style={{ height: "min(560px, 75vh)" }}
+      >
+        <div className="flex items-center gap-3 px-4 py-3 border-b border-border/30 shrink-0">
+          <button onClick={() => { setActiveChat(null); setChatMessages([]); }} className="p-1.5 rounded-lg hover:bg-secondary/50 text-muted-foreground">
+            <ArrowLeft className="w-4 h-4" />
+          </button>
+          <img src={activeChat.reporter?.avatar_url || `https://ui-avatars.com/api/?name=U&background=random`}
+            alt="" className="w-9 h-9 rounded-full object-cover border border-border" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-foreground">{activeChat.reporter?.display_name || "Usuario"}</p>
+            <p className="text-[10px] text-muted-foreground">{activeChat.category} · {new Date(activeChat.created_at).toLocaleDateString("es-MX")}</p>
+          </div>
+          <Button size="sm" variant="destructive" onClick={() => resolveAndDelete(activeChat.id)} className="text-xs gap-1">
+            <CheckCircle2 className="w-3 h-3" /> Resolver
+          </Button>
+        </div>
+
+        {/* Initial report message */}
+        {activeChat.message && (
+          <div className="px-4 py-2 bg-secondary/30 border-b border-border/20">
+            <p className="text-xs text-muted-foreground">Mensaje inicial:</p>
+            <p className="text-sm text-foreground">{activeChat.message}</p>
+          </div>
+        )}
+
+        <div className="flex-1 overflow-y-auto p-4 space-y-3">
+          {chatMessages.length === 0 && (
+            <div className="text-center py-8">
+              <MessageCircle className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
+              <p className="text-xs text-muted-foreground">No hay mensajes aún. Responde al usuario.</p>
+            </div>
+          )}
+          {chatMessages.map((msg) => (
+            <div key={msg.id} className={`flex ${msg.sender_id === user?.id ? "justify-end" : "justify-start"}`}>
+              <div className={`max-w-[75%] px-3.5 py-2 rounded-2xl text-sm ${
+                msg.sender_id === user?.id ? "bg-primary text-primary-foreground rounded-br-md" : "bg-secondary text-foreground rounded-bl-md"
+              }`}>
+                <p>{msg.message}</p>
+                <p className={`text-[9px] mt-1 ${msg.sender_id === user?.id ? "text-primary-foreground/60" : "text-muted-foreground"}`}>
+                  {new Date(msg.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                </p>
+              </div>
+            </div>
+          ))}
+          <div ref={bottomRef} />
+        </div>
+
+        <div className="px-4 py-3 border-t border-border/30 flex items-center gap-2 shrink-0">
+          <Input value={newMessage} onChange={(e) => setNewMessage(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && sendMessage()} placeholder="Responder al usuario..."
+            className="bg-secondary/50 border-border/50" />
+          <Button size="sm" onClick={sendMessage} disabled={!newMessage.trim()} className="shrink-0">
+            <Send className="w-4 h-4" />
+          </Button>
+        </div>
+      </motion.div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -114,21 +243,17 @@ const AdminReportsTab = () => {
                   </div>
                 </div>
                 <div className="px-5 py-3 border-t border-border/30 flex items-center gap-2 flex-wrap">
-                  {status !== "pending" && (
-                    <Button variant="ghost" size="sm" onClick={() => updateStatus(report.id, "pending")} className="text-xs gap-1 text-muted-foreground hover:text-accent">
-                      <AlertTriangle className="w-3 h-3" /> Pendiente
-                    </Button>
-                  )}
+                  <Button variant="outline" size="sm" onClick={() => openChat(report)} className="text-xs gap-1">
+                    <MessageCircle className="w-3 h-3" /> Chatear
+                  </Button>
                   {status !== "in_progress" && (
                     <Button variant="ghost" size="sm" onClick={() => updateStatus(report.id, "in_progress")} className="text-xs gap-1 text-muted-foreground hover:text-primary">
                       <Clock className="w-3 h-3" /> En Proceso
                     </Button>
                   )}
-                  {status !== "resolved" && (
-                    <Button variant="ghost" size="sm" onClick={() => updateStatus(report.id, "resolved")} className="text-xs gap-1 text-muted-foreground hover:text-accent">
-                      <CheckCircle2 className="w-3 h-3" /> Resuelto
-                    </Button>
-                  )}
+                  <Button variant="ghost" size="sm" onClick={() => resolveAndDelete(report.id)} className="text-xs gap-1 text-muted-foreground hover:text-accent">
+                    <CheckCircle2 className="w-3 h-3" /> Resolver y Eliminar
+                  </Button>
                 </div>
               </motion.div>
             );

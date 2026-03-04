@@ -1,14 +1,13 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { MessageCircle, X, Send, ChevronLeft, AlertTriangle, Bug, HelpCircle } from "lucide-react";
-import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 
-type SupportView = "menu" | "chat";
+type SupportView = "menu" | "chat" | "tickets";
 type TicketCategory = "bug" | "issue" | "question";
 
 const categories: { key: TicketCategory; label: string; icon: React.ElementType; desc: string }[] = [
@@ -17,57 +16,125 @@ const categories: { key: TicketCategory; label: string; icon: React.ElementType;
   { key: "question", label: "Pregunta", icon: HelpCircle, desc: "Necesitas ayuda o información" },
 ];
 
-interface ChatMsg { id: number; text: string; sender: "user" | "support"; time: string; }
-
 const SupportChat = () => {
-  const navigate = useNavigate();
   const { user } = useAuth();
   const { toast } = useToast();
   const [isOpen, setIsOpen] = useState(false);
   const [view, setView] = useState<SupportView>("menu");
   const [selectedCategory, setSelectedCategory] = useState<TicketCategory | null>(null);
   const [message, setMessage] = useState("");
-  const [messages, setMessages] = useState<ChatMsg[]>([]);
-  const [ticketSent, setTicketSent] = useState(false);
+  const [activeReportId, setActiveReportId] = useState<string | null>(null);
+  const [messages, setMessages] = useState<any[]>([]);
+  const [myTickets, setMyTickets] = useState<any[]>([]);
+  const bottomRef = useRef<HTMLDivElement>(null);
+
+  // Fetch user's open tickets
+  useEffect(() => {
+    if (!user || !isOpen) return;
+    fetchMyTickets();
+  }, [user, isOpen]);
+
+  const fetchMyTickets = async () => {
+    if (!user) return;
+    const { data } = await supabase
+      .from("reports")
+      .select("*")
+      .eq("reporter_id", user.id)
+      .neq("status", "resolved")
+      .order("created_at", { ascending: false });
+    setMyTickets(data || []);
+  };
 
   const handleSelectCategory = (cat: TicketCategory) => {
     setSelectedCategory(cat);
     setView("chat");
-    setMessages([{
-      id: 1,
-      text: `¡Hola! Cuéntanos sobre tu ${cat === "bug" ? "bug" : cat === "issue" ? "problema" : "pregunta"} y te ayudaremos lo antes posible.`,
-      sender: "support",
-      time: "Ahora",
-    }]);
-    setTicketSent(false);
+    setMessages([]);
+    setActiveReportId(null);
   };
 
   const handleSend = async () => {
-    if (!message.trim()) return;
-    const newMsg: ChatMsg = { id: messages.length + 1, text: message, sender: "user", time: "Ahora" };
-    setMessages((prev) => [...prev, newMsg]);
+    if (!message.trim() || !user) return;
+    const text = message.trim();
     setMessage("");
 
-    if (!ticketSent && user && selectedCategory) {
-      setTicketSent(true);
-      // Save as report
-      await supabase.from("reports").insert({
-        reporter_id: user.id,
-        category: selectedCategory,
-        message: message,
-      });
-      setTimeout(() => {
-        setMessages((prev) => [...prev, {
-          id: prev.length + 1,
-          text: "Tu ticket ha sido recibido. Un moderador lo revisará pronto.",
-          sender: "support",
-          time: "Ahora",
-        }]);
-      }, 1000);
+    // If no active report yet, create one
+    let reportId = activeReportId;
+    if (!reportId && selectedCategory) {
+      const { data: report, error } = await supabase
+        .from("reports")
+        .insert({
+          reporter_id: user.id,
+          category: selectedCategory,
+          message: text,
+        })
+        .select()
+        .single();
+      if (error || !report) {
+        toast({ title: "Error", description: "No se pudo crear el ticket", variant: "destructive" });
+        return;
+      }
+      reportId = report.id;
+      setActiveReportId(reportId);
+    }
+
+    if (!reportId) return;
+
+    // Send support message
+    const { data: msg } = await supabase
+      .from("support_messages")
+      .insert({ report_id: reportId, sender_id: user.id, message: text })
+      .select()
+      .single();
+
+    if (msg) {
+      setMessages(prev => [...prev, msg]);
+      setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
     }
   };
 
-  const handleBack = () => { setView("menu"); setSelectedCategory(null); setMessages([]); setTicketSent(false); };
+  const openTicketChat = async (report: any) => {
+    setActiveReportId(report.id);
+    setSelectedCategory(report.category);
+    setView("chat");
+
+    const { data } = await supabase
+      .from("support_messages")
+      .select("*")
+      .eq("report_id", report.id)
+      .order("created_at", { ascending: true });
+    setMessages(data || []);
+    setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
+  };
+
+  // Realtime for support messages
+  useEffect(() => {
+    if (!activeReportId || !user) return;
+    const channel = supabase
+      .channel(`support-${activeReportId}`)
+      .on("postgres_changes", {
+        event: "INSERT",
+        schema: "public",
+        table: "support_messages",
+        filter: `report_id=eq.${activeReportId}`,
+      }, (payload) => {
+        const msg = payload.new as any;
+        setMessages(prev => {
+          if (prev.some(m => m.id === msg.id)) return prev;
+          return [...prev, msg];
+        });
+        setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [activeReportId, user]);
+
+  const handleBack = () => {
+    setView("menu");
+    setSelectedCategory(null);
+    setMessages([]);
+    setActiveReportId(null);
+    fetchMyTickets();
+  };
 
   return (
     <>
@@ -79,7 +146,14 @@ const SupportChat = () => {
           {isOpen ? (
             <motion.div key="close" initial={{ rotate: -90, opacity: 0 }} animate={{ rotate: 0, opacity: 1 }} exit={{ rotate: 90, opacity: 0 }}><X className="w-6 h-6" /></motion.div>
           ) : (
-            <motion.div key="open" initial={{ rotate: 90, opacity: 0 }} animate={{ rotate: 0, opacity: 1 }} exit={{ rotate: -90, opacity: 0 }}><MessageCircle className="w-6 h-6" /></motion.div>
+            <motion.div key="open" initial={{ rotate: 90, opacity: 0 }} animate={{ rotate: 0, opacity: 1 }} exit={{ rotate: -90, opacity: 0 }}>
+              <MessageCircle className="w-6 h-6" />
+              {myTickets.length > 0 && (
+                <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-destructive text-destructive-foreground text-[10px] font-bold flex items-center justify-center">
+                  {myTickets.length}
+                </span>
+              )}
+            </motion.div>
           )}
         </AnimatePresence>
       </motion.button>
@@ -90,18 +164,43 @@ const SupportChat = () => {
             className="fixed bottom-24 right-6 z-50 w-[340px] max-h-[480px] bg-card border border-border rounded-2xl shadow-2xl flex flex-col overflow-hidden"
           >
             <div className="px-4 py-3 border-b border-border flex items-center gap-3 bg-card">
-              {view === "chat" && (
+              {view !== "menu" && (
                 <button onClick={handleBack} className="p-1 rounded-lg hover:bg-secondary transition-colors"><ChevronLeft className="w-4 h-4 text-muted-foreground" /></button>
               )}
               <div className="flex-1">
-                <h3 className="text-sm font-semibold text-foreground">{view === "menu" ? "Soporte" : "Chat de Soporte"}</h3>
-                <p className="text-xs text-muted-foreground">{view === "menu" ? "¿En qué podemos ayudarte?" : categories.find(c => c.key === selectedCategory)?.label}</p>
+                <h3 className="text-sm font-semibold text-foreground">
+                  {view === "menu" ? "Soporte" : view === "tickets" ? "Mis Tickets" : "Chat de Soporte"}
+                </h3>
+                <p className="text-xs text-muted-foreground">
+                  {view === "menu" ? "¿En qué podemos ayudarte?" : view === "tickets" ? "Tickets abiertos" : categories.find(c => c.key === selectedCategory)?.label}
+                </p>
               </div>
               <div className="w-2 h-2 rounded-full bg-accent" title="En línea" />
             </div>
 
             {view === "menu" && (
-              <div className="p-4 space-y-2 flex-1">
+              <div className="p-4 space-y-2 flex-1 overflow-y-auto">
+                {/* Open tickets */}
+                {myTickets.length > 0 && (
+                  <div className="space-y-2 mb-3">
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Tickets Abiertos</p>
+                    {myTickets.map((t) => (
+                      <button key={t.id} onClick={() => openTicketChat(t)}
+                        className="w-full flex items-center gap-3 p-3 rounded-xl border border-primary/20 bg-primary/5 hover:bg-primary/10 transition-all text-left"
+                      >
+                        <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                          <MessageCircle className="w-4 h-4 text-primary" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-medium text-foreground truncate">{t.category} — {t.message?.slice(0, 30)}...</p>
+                          <p className="text-[10px] text-muted-foreground">{t.status === "in_progress" ? "En proceso" : "Pendiente"}</p>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Nuevo Ticket</p>
                 {categories.map((cat) => {
                   const Icon = cat.icon;
                   return (
@@ -119,15 +218,24 @@ const SupportChat = () => {
             {view === "chat" && (
               <>
                 <div className="flex-1 overflow-y-auto p-4 space-y-3 max-h-[300px]">
+                  {messages.length === 0 && (
+                    <div className="text-center py-4">
+                      <p className="text-xs text-muted-foreground">Describe tu {selectedCategory === "bug" ? "bug" : selectedCategory === "issue" ? "problema" : "pregunta"} y te ayudaremos.</p>
+                    </div>
+                  )}
                   {messages.map((msg) => (
-                    <div key={msg.id} className={`flex ${msg.sender === "user" ? "justify-end" : "justify-start"}`}>
+                    <div key={msg.id} className={`flex ${msg.sender_id === user?.id ? "justify-end" : "justify-start"}`}>
                       <div className={`max-w-[80%] rounded-2xl px-3 py-2 text-sm ${
-                        msg.sender === "user" ? "bg-primary text-primary-foreground rounded-br-md" : "bg-secondary text-foreground rounded-bl-md"
+                        msg.sender_id === user?.id ? "bg-primary text-primary-foreground rounded-br-md" : "bg-secondary text-foreground rounded-bl-md"
                       }`}>
-                        <p>{msg.text}</p>
+                        <p>{msg.message}</p>
+                        <p className={`text-[9px] mt-1 ${msg.sender_id === user?.id ? "text-primary-foreground/60" : "text-muted-foreground"}`}>
+                          {new Date(msg.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                        </p>
                       </div>
                     </div>
                   ))}
+                  <div ref={bottomRef} />
                 </div>
                 <div className="p-3 border-t border-border flex items-center gap-2">
                   <Input value={message} onChange={(e) => setMessage(e.target.value)} onKeyDown={(e) => e.key === "Enter" && handleSend()}
