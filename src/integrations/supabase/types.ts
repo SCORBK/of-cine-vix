@@ -14,6 +14,27 @@ export type Database = {
   }
   public: {
     Tables: {
+      avatar_gallery: {
+        Row: {
+          created_at: string
+          id: string
+          type: string
+          url: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          type?: string
+          url: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          type?: string
+          url?: string
+        }
+        Relationships: []
+      }
       chat_messages: {
         Row: {
           created_at: string
@@ -114,6 +135,7 @@ export type Database = {
           updated_at: string
           user_id: string
           username: string | null
+          verified: boolean | null
         }
         Insert: {
           avatar_url?: string | null
@@ -127,6 +149,7 @@ export type Database = {
           updated_at?: string
           user_id: string
           username?: string | null
+          verified?: boolean | null
         }
         Update: {
           avatar_url?: string | null
@@ -140,6 +163,7 @@ export type Database = {
           updated_at?: string
           user_id?: string
           username?: string | null
+          verified?: boolean | null
         }
         Relationships: []
       }
