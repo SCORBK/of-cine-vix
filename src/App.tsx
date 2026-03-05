@@ -43,6 +43,7 @@ const App = () => (
             </Routes>
           </BrowserRouter>
         </MovieListsProvider>
+        </SiteSettingsProvider>
       </AuthProvider>
     </TooltipProvider>
   </QueryClientProvider>
