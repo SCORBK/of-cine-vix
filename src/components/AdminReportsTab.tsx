@@ -196,9 +196,15 @@ const AdminReportsTab = () => {
         </div>
 
         <div className="px-4 py-3 border-t border-border/30 flex items-center gap-2 shrink-0">
-          <div className={`flex items-center gap-1 px-2 py-1 rounded-lg bg-secondary/50 text-xs shrink-0 ${roleConfig[myRole]?.color || "text-muted-foreground"}`}>
-            {roleConfig[myRole] && <roleConfig[myRole].icon className="w-3 h-3" />}
-            <span className="font-medium">{roleConfig[myRole]?.label}</span>
+          {(() => {
+            const RoleIcon = roleConfig[myRole]?.icon;
+            return (
+              <div className={`flex items-center gap-1 px-2 py-1 rounded-lg bg-secondary/50 text-xs shrink-0 ${roleConfig[myRole]?.color || "text-muted-foreground"}`}>
+                {RoleIcon && <RoleIcon className="w-3 h-3" />}
+                <span className="font-medium">{roleConfig[myRole]?.label}</span>
+              </div>
+            );
+          })()}
           </div>
           <Input value={newMessage} onChange={(e) => setNewMessage(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && sendMessage()} placeholder="Responder al usuario..."
