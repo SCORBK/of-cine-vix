@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { CheckCircle2, Clock, AlertTriangle, MessageCircle, ArrowLeft, Send, Trash2 } from "lucide-react";
+import { CheckCircle2, Clock, AlertTriangle, MessageCircle, ArrowLeft, Send, Shield, ShieldCheck, ShieldAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
@@ -20,30 +20,31 @@ const statusConfig: Record<TicketStatus, { label: string; icon: React.ElementTyp
   resolved: { label: "Resuelto", icon: CheckCircle2, bg: "bg-accent/10", text: "text-accent", border: "border-accent/20" },
 };
 
+const roleConfig: Record<string, { label: string; icon: React.ElementType; color: string }> = {
+  admin: { label: "Admin", icon: Shield, color: "text-primary" },
+  support: { label: "Soporte", icon: ShieldCheck, color: "text-accent" },
+  moderator: { label: "Moderador", icon: ShieldAlert, color: "text-blue-400" },
+};
+
 const AdminReportsTab = () => {
-  const { user } = useAuth();
+  const { user, isAdmin, hasRole } = useAuth();
   const { toast } = useToast();
   const [reports, setReports] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeChat, setActiveChat] = useState<any>(null);
   const [chatMessages, setChatMessages] = useState<any[]>([]);
   const [newMessage, setNewMessage] = useState("");
+  const [senderRoles, setSenderRoles] = useState<Record<string, string>>({});
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  const myRole = isAdmin ? "admin" : hasRole("support") ? "support" : "moderator";
 
   const fetchReports = async () => {
     setLoading(true);
-    const { data } = await supabase
-      .from("reports")
-      .select("*")
-      .order("created_at", { ascending: false });
-
+    const { data } = await supabase.from("reports").select("*").order("created_at", { ascending: false });
     if (data && data.length > 0) {
       const userIds = [...new Set(data.map((r: any) => r.reporter_id))];
-      const { data: profiles } = await supabase
-        .from("profiles")
-        .select("user_id, display_name, avatar_url, username")
-        .in("user_id", userIds);
-
+      const { data: profiles } = await supabase.from("profiles").select("user_id, display_name, avatar_url, username").in("user_id", userIds);
       const profileMap = new Map((profiles || []).map((p: any) => [p.user_id, p]));
       setReports(data.map((r: any) => ({ ...r, reporter: profileMap.get(r.reporter_id) })));
     } else {
@@ -60,14 +61,28 @@ const AdminReportsTab = () => {
     fetchReports();
   };
 
+  const fetchSenderRoles = async (msgs: any[]) => {
+    const senderIds = [...new Set(msgs.map(m => m.sender_id))];
+    if (senderIds.length === 0) return;
+    const { data } = await supabase.from("user_roles").select("user_id, role").in("user_id", senderIds);
+    const map: Record<string, string> = {};
+    (data || []).forEach((r: any) => {
+      if (!map[r.user_id] || r.role === "admin" || (r.role === "support" && map[r.user_id] === "moderator")) {
+        map[r.user_id] = r.role;
+      }
+    });
+    setSenderRoles(prev => ({ ...prev, ...map }));
+  };
+
   const openChat = async (report: any) => {
     setActiveChat(report);
-    const { data } = await supabase
-      .from("support_messages")
-      .select("*")
-      .eq("report_id", report.id)
-      .order("created_at", { ascending: true });
-    setChatMessages(data || []);
+    if (report.status === "pending") {
+      await supabase.from("reports").update({ status: "in_progress" }).eq("id", report.id);
+    }
+    const { data } = await supabase.from("support_messages").select("*").eq("report_id", report.id).order("created_at", { ascending: true });
+    const msgs = data || [];
+    setChatMessages(msgs);
+    fetchSenderRoles(msgs);
     setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
   };
 
@@ -76,8 +91,7 @@ const AdminReportsTab = () => {
     const { data: msg } = await supabase
       .from("support_messages")
       .insert({ report_id: activeChat.id, sender_id: user.id, message: newMessage.trim() })
-      .select()
-      .single();
+      .select().single();
     if (msg) {
       setChatMessages(prev => [...prev, msg]);
       setNewMessage("");
@@ -86,9 +100,7 @@ const AdminReportsTab = () => {
   };
 
   const resolveAndDelete = async (reportId: string) => {
-    // Delete support messages
     await supabase.from("support_messages").delete().eq("report_id", reportId);
-    // Delete the report
     await supabase.from("reports").delete().eq("id", reportId);
     toast({ title: "Reporte resuelto y eliminado" });
     setActiveChat(null);
@@ -96,15 +108,12 @@ const AdminReportsTab = () => {
     fetchReports();
   };
 
-  // Realtime for support messages
   useEffect(() => {
     if (!activeChat) return;
     const channel = supabase
       .channel(`admin-support-${activeChat.id}`)
       .on("postgres_changes", {
-        event: "INSERT",
-        schema: "public",
-        table: "support_messages",
+        event: "INSERT", schema: "public", table: "support_messages",
         filter: `report_id=eq.${activeChat.id}`,
       }, (payload) => {
         const msg = payload.new as any;
@@ -112,6 +121,7 @@ const AdminReportsTab = () => {
           if (prev.some(m => m.id === msg.id)) return prev;
           return [...prev, msg];
         });
+        fetchSenderRoles([msg]);
         setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
       })
       .subscribe();
@@ -124,7 +134,6 @@ const AdminReportsTab = () => {
     resolved: reports.filter(r => r.status === "resolved").length,
   };
 
-  // Chat view
   if (activeChat) {
     return (
       <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }}
@@ -132,7 +141,7 @@ const AdminReportsTab = () => {
         style={{ height: "min(560px, 75vh)" }}
       >
         <div className="flex items-center gap-3 px-4 py-3 border-b border-border/30 shrink-0">
-          <button onClick={() => { setActiveChat(null); setChatMessages([]); }} className="p-1.5 rounded-lg hover:bg-secondary/50 text-muted-foreground">
+          <button onClick={() => { setActiveChat(null); setChatMessages([]); fetchReports(); }} className="p-1.5 rounded-lg hover:bg-secondary/50 text-muted-foreground">
             <ArrowLeft className="w-4 h-4" />
           </button>
           <img src={activeChat.reporter?.avatar_url || `https://ui-avatars.com/api/?name=U&background=random`}
@@ -146,7 +155,6 @@ const AdminReportsTab = () => {
           </Button>
         </div>
 
-        {/* Initial report message */}
         {activeChat.message && (
           <div className="px-4 py-2 bg-secondary/30 border-b border-border/20">
             <p className="text-xs text-muted-foreground">Mensaje inicial:</p>
@@ -161,25 +169,40 @@ const AdminReportsTab = () => {
               <p className="text-xs text-muted-foreground">No hay mensajes aún. Responde al usuario.</p>
             </div>
           )}
-          {chatMessages.map((msg) => (
-            <div key={msg.id} className={`flex ${msg.sender_id === user?.id ? "justify-end" : "justify-start"}`}>
-              <div className={`max-w-[75%] px-3.5 py-2 rounded-2xl text-sm ${
-                msg.sender_id === user?.id ? "bg-primary text-primary-foreground rounded-br-md" : "bg-secondary text-foreground rounded-bl-md"
-              }`}>
-                <p>{msg.message}</p>
-                <p className={`text-[9px] mt-1 ${msg.sender_id === user?.id ? "text-primary-foreground/60" : "text-muted-foreground"}`}>
-                  {new Date(msg.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                </p>
+          {chatMessages.map((msg) => {
+            const isMine = msg.sender_id === user?.id;
+            const role = senderRoles[msg.sender_id];
+            const rc = role ? roleConfig[role] : null;
+            return (
+              <div key={msg.id} className={`flex ${isMine ? "justify-end" : "justify-start"}`}>
+                <div className={`max-w-[75%] px-3.5 py-2 rounded-2xl text-sm ${
+                  isMine ? "bg-primary text-primary-foreground rounded-br-md" : "bg-secondary text-foreground rounded-bl-md"
+                }`}>
+                  {rc && (
+                    <div className={`flex items-center gap-1 mb-1 ${isMine ? "text-primary-foreground/80" : rc.color}`}>
+                      <rc.icon className="w-3 h-3" />
+                      <span className="text-[10px] font-semibold">{rc.label}</span>
+                    </div>
+                  )}
+                  <p>{msg.message}</p>
+                  <p className={`text-[9px] mt-1 ${isMine ? "text-primary-foreground/60" : "text-muted-foreground"}`}>
+                    {new Date(msg.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                  </p>
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
           <div ref={bottomRef} />
         </div>
 
         <div className="px-4 py-3 border-t border-border/30 flex items-center gap-2 shrink-0">
+          <div className={`flex items-center gap-1 px-2 py-1 rounded-lg bg-secondary/50 text-xs shrink-0 ${roleConfig[myRole]?.color || "text-muted-foreground"}`}>
+            {roleConfig[myRole] && <roleConfig[myRole].icon className="w-3 h-3" />}
+            <span className="font-medium">{roleConfig[myRole]?.label}</span>
+          </div>
           <Input value={newMessage} onChange={(e) => setNewMessage(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && sendMessage()} placeholder="Responder al usuario..."
-            className="bg-secondary/50 border-border/50" />
+            className="bg-secondary/50 border-border/50 flex-1" />
           <Button size="sm" onClick={sendMessage} disabled={!newMessage.trim()} className="shrink-0">
             <Send className="w-4 h-4" />
           </Button>
@@ -226,10 +249,8 @@ const AdminReportsTab = () => {
                 className="rounded-xl border border-border/50 bg-card/60 backdrop-blur-sm overflow-hidden"
               >
                 <div className="px-5 py-4 flex items-start gap-4">
-                  <img
-                    src={report.reporter?.avatar_url || `https://ui-avatars.com/api/?name=U&background=random`}
-                    alt="" className="w-10 h-10 rounded-full object-cover shrink-0 border-2 border-border"
-                  />
+                  <img src={report.reporter?.avatar_url || `https://ui-avatars.com/api/?name=U&background=random`}
+                    alt="" className="w-10 h-10 rounded-full object-cover shrink-0 border-2 border-border" />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <p className="text-sm font-semibold text-foreground">{report.reporter?.display_name || "Usuario"}</p>

@@ -14,19 +14,20 @@ import AdminRolesTab from "@/components/AdminRolesTab";
 import AdminFollowersTab from "@/components/AdminFollowersTab";
 import AdminMoviesTab from "@/components/AdminMoviesTab";
 import { useAuth } from "@/hooks/useAuth";
+import { usePermissions } from "@/hooks/usePermissions";
 import { supabase } from "@/integrations/supabase/client";
 
 type AdminTab = "dashboard" | "reports" | "chats" | "users" | "roles" | "followers" | "customize" | "movies";
 
-const adminTabs: { key: AdminTab; label: string; icon: React.ElementType }[] = [
+const allAdminTabs: { key: AdminTab; label: string; icon: React.ElementType; permission?: string }[] = [
   { key: "dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { key: "movies", label: "Películas", icon: Film },
-  { key: "reports", label: "Reportes", icon: Flag },
-  { key: "chats", label: "Chats", icon: MessageCircle },
-  { key: "users", label: "Usuarios", icon: Users },
-  { key: "roles", label: "Roles", icon: Shield },
-  { key: "followers", label: "Seguidores", icon: UserCheck },
-  { key: "customize", label: "Personalización", icon: Palette },
+  { key: "movies", label: "Películas", icon: Film, permission: "manage_movies" },
+  { key: "reports", label: "Reportes", icon: Flag, permission: "manage_reports" },
+  { key: "chats", label: "Chats", icon: MessageCircle, permission: "manage_chats" },
+  { key: "users", label: "Usuarios", icon: Users, permission: "manage_users" },
+  { key: "roles", label: "Roles", icon: Shield, permission: "manage_roles" },
+  { key: "followers", label: "Seguidores", icon: UserCheck, permission: "manage_followers" },
+  { key: "customize", label: "Personalización", icon: Palette, permission: "manage_customize" },
 ];
 
 const fadeIn = {
@@ -37,8 +38,12 @@ const fadeIn = {
 const Admin = () => {
   const navigate = useNavigate();
   const { isAdmin, hasRole, loading } = useAuth();
+  const { hasPermission, loading: permLoading } = usePermissions();
   const [activeTab, setActiveTab] = useState<AdminTab>("dashboard");
   const [stats, setStats] = useState({ users: 0, reports: 0, movies: 0 });
+
+  // Filter tabs based on permissions
+  const adminTabs = allAdminTabs.filter(tab => !tab.permission || hasPermission(tab.permission));
 
   useEffect(() => {
     const fetchStats = async () => {
@@ -52,7 +57,7 @@ const Admin = () => {
     fetchStats();
   }, []);
 
-  if (loading) {
+  if (loading || permLoading) {
     return <div className="min-h-screen bg-background flex items-center justify-center"><p className="text-muted-foreground">Cargando...</p></div>;
   }
 
@@ -121,48 +126,13 @@ const Admin = () => {
               <StatCard index={2} icon={Film} label="Películas" value={String(stats.movies)} color="primary" />
             </motion.div>
           )}
-
-          {activeTab === "reports" && (
-            <motion.div key="reports" initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
-              <AdminReportsTab />
-            </motion.div>
-          )}
-
-          {activeTab === "customize" && (
-            <motion.div key="customize" initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
-              <AdminCustomizeTab />
-            </motion.div>
-          )}
-
-          {activeTab === "chats" && (
-            <motion.div key="chats" initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
-              <AdminChatsTab />
-            </motion.div>
-          )}
-
-          {activeTab === "users" && (
-            <motion.div key="users" initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
-              <AdminUsersTab />
-            </motion.div>
-          )}
-
-          {activeTab === "roles" && (
-            <motion.div key="roles" initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
-              <AdminRolesTab />
-            </motion.div>
-          )}
-
-          {activeTab === "followers" && (
-            <motion.div key="followers" initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
-              <AdminFollowersTab />
-            </motion.div>
-          )}
-
-          {activeTab === "movies" && (
-            <motion.div key="movies" initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
-              <AdminMoviesTab />
-            </motion.div>
-          )}
+          {activeTab === "reports" && <motion.div key="reports" initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}><AdminReportsTab /></motion.div>}
+          {activeTab === "customize" && <motion.div key="customize" initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}><AdminCustomizeTab /></motion.div>}
+          {activeTab === "chats" && <motion.div key="chats" initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}><AdminChatsTab /></motion.div>}
+          {activeTab === "users" && <motion.div key="users" initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}><AdminUsersTab /></motion.div>}
+          {activeTab === "roles" && <motion.div key="roles" initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}><AdminRolesTab /></motion.div>}
+          {activeTab === "followers" && <motion.div key="followers" initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}><AdminFollowersTab /></motion.div>}
+          {activeTab === "movies" && <motion.div key="movies" initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}><AdminMoviesTab /></motion.div>}
         </AnimatePresence>
       </div>
     </div>

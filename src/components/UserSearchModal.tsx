@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Search, X, UserPlus, UserCheck, User } from "lucide-react";
+import { Search, X, UserPlus, UserCheck, User, MessageCircle, CheckCircle2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
@@ -35,7 +35,7 @@ const UserSearchModal = ({ open, onClose }: UserSearchModalProps) => {
   useEffect(() => {
     if (!query.trim()) { setUsers([]); return; }
     const timer = setTimeout(async () => {
-      const { data } = await supabase.from("profiles").select("user_id, display_name, username, avatar_url")
+      const { data } = await supabase.from("profiles").select("user_id, display_name, username, avatar_url, verified")
         .or(`display_name.ilike.%${query}%,username.ilike.%${query}%`)
         .limit(10);
       setUsers((data || []).filter(u => u.user_id !== user?.id));
@@ -52,6 +52,18 @@ const UserSearchModal = ({ open, onClose }: UserSearchModalProps) => {
       await supabase.from("followers").insert({ follower_id: user.id, following_id: targetId });
       setFollowing(prev => new Set(prev).add(targetId));
     }
+  };
+
+  const startChat = async (targetId: string) => {
+    if (!user) return;
+    // Send initial greeting to start chat thread
+    await supabase.from("chat_messages").insert({
+      sender_id: user.id,
+      receiver_id: targetId,
+      message: "👋 ¡Hola!",
+    });
+    onClose();
+    navigate("/profile");
   };
 
   return (
@@ -95,9 +107,18 @@ const UserSearchModal = ({ open, onClose }: UserSearchModalProps) => {
                       <div className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center border-2 border-border"><User className="w-5 h-5 text-muted-foreground" /></div>
                     )}
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-foreground truncate">{u.display_name || "Usuario"}</p>
+                      <p className="text-sm font-semibold text-foreground truncate flex items-center gap-1">
+                        {u.display_name || "Usuario"}
+                        {u.verified && <CheckCircle2 className="w-3.5 h-3.5 text-primary shrink-0" />}
+                      </p>
                       <p className="text-xs text-muted-foreground">@{u.username || "usuario"}</p>
                     </div>
+                    <Button size="icon" variant="ghost" className="shrink-0 h-8 w-8"
+                      onClick={(e) => { e.stopPropagation(); startChat(u.user_id); }}
+                      title="Enviar mensaje"
+                    >
+                      <MessageCircle className="w-4 h-4" />
+                    </Button>
                     <Button size="sm" variant={isFollowing ? "secondary" : "default"} className="text-xs gap-1 shrink-0"
                       onClick={(e) => { e.stopPropagation(); handleFollow(u.user_id); }}
                     >
