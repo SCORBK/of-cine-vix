@@ -205,7 +205,6 @@ const AdminReportsTab = () => {
               </div>
             );
           })()}
-          </div>
           <Input value={newMessage} onChange={(e) => setNewMessage(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && sendMessage()} placeholder="Responder al usuario..."
             className="bg-secondary/50 border-border/50 flex-1" />
