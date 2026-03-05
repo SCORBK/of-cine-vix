@@ -1,14 +1,18 @@
-import { Search, User, LogOut, Shield } from "lucide-react";
+import { Search, User, LogOut, Shield, CheckCircle2 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import SearchOverlay from "@/components/SearchOverlay";
 import { useAuth } from "@/hooks/useAuth";
+import { useSiteSettings } from "@/hooks/useSiteSettings";
 
 const Navbar = () => {
   const navigate = useNavigate();
   const [scrolled, setScrolled] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const { user, profile, isAdmin, hasRole, signOut } = useAuth();
+  const { settings } = useSiteSettings();
+
+  const appName = settings.text_appName || "Velora";
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 50);
@@ -25,8 +29,8 @@ const Navbar = () => {
       >
         <div className="flex items-center gap-8">
           <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight cursor-pointer" onClick={() => navigate("/")}>
-            <span className="text-primary">Vel</span>
-            <span className="text-foreground">ora</span>
+            <span className="text-primary">{appName.slice(0, 3)}</span>
+            <span className="text-foreground">{appName.slice(3)}</span>
           </h1>
           <div className="hidden md:flex items-center gap-6">
             {[
@@ -57,11 +61,14 @@ const Navbar = () => {
           )}
           {user ? (
             <div className="flex items-center gap-2">
-              <button onClick={() => navigate("/profile")} className="w-8 h-8 rounded-full bg-primary flex items-center justify-center overflow-hidden">
+              <button onClick={() => navigate("/profile")} className="relative w-8 h-8 rounded-full bg-primary flex items-center justify-center overflow-hidden">
                 {profile?.avatar_url ? (
                   <img src={profile.avatar_url} alt="" className="w-full h-full object-cover" />
                 ) : (
                   <User className="w-4 h-4 text-primary-foreground" />
+                )}
+                {(profile as any)?.verified && (
+                  <CheckCircle2 className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 text-primary bg-background rounded-full" />
                 )}
               </button>
               <button onClick={signOut} className="p-2 rounded-full hover:bg-secondary transition-colors" title="Cerrar sesión">

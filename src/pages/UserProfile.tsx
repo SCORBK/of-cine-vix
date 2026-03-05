@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, User, Heart, Eye, UserPlus, UserCheck, MessageCircle } from "lucide-react";
+import { ArrowLeft, User, Heart, Eye, UserPlus, UserCheck, MessageCircle, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -32,13 +32,11 @@ const UserProfile = () => {
       setFollowerCount(followers || 0);
       setFollowingCount(following || 0);
 
-      // Check if current user follows this profile
       if (user) {
         const { data: followData } = await supabase.from("followers").select("id").eq("follower_id", user.id).eq("following_id", userId);
         setIsFollowing((followData || []).length > 0);
       }
 
-      // Fetch favorite movies
       const { data: lists } = await supabase.from("user_movie_lists").select("movie_id").eq("user_id", userId).eq("list_type", "favorite");
       if (lists && lists.length > 0) {
         const { data: movies } = await supabase.from("movies").select("*").in("id", lists.map(l => l.movie_id));
@@ -62,9 +60,16 @@ const UserProfile = () => {
     }
   };
 
-  const startChat = () => {
+  const startChat = async () => {
+    if (!user || !userId) return;
+    // Send initial message to start chat
+    await supabase.from("chat_messages").insert({
+      sender_id: user.id,
+      receiver_id: userId,
+      message: "👋 ¡Hola!",
+    });
     navigate("/profile");
-    // User will find or start chat from profile chats tab
+    // Navigate to profile chats tab - the chat will appear there
   };
 
   if (loading) {
@@ -111,7 +116,10 @@ const UserProfile = () => {
               </div>
 
               <div className="flex-1 text-center sm:text-left sm:pb-1">
-                <h1 className="text-2xl sm:text-3xl font-bold text-foreground">{profile.display_name || "Usuario"}</h1>
+                <h1 className="text-2xl sm:text-3xl font-bold text-foreground flex items-center gap-2 justify-center sm:justify-start">
+                  {profile.display_name || "Usuario"}
+                  {profile.verified && <CheckCircle2 className="w-5 h-5 text-primary" />}
+                </h1>
                 <p className="text-muted-foreground text-sm mt-0.5">@{profile.username || "usuario"}</p>
                 <div className="flex items-center gap-3 mt-1.5 justify-center sm:justify-start">
                   <span className="text-xs text-muted-foreground"><strong className="text-foreground">{followerCount}</strong> seguidores</span>
@@ -140,9 +148,7 @@ const UserProfile = () => {
               <Heart className="w-4 h-4 text-destructive" /> Películas favoritas
             </h2>
             <div className="flex flex-wrap gap-4">
-              {favoriteMovies.map((m, i) => (
-                <MovieCard key={m.id} movie={m} index={i} />
-              ))}
+              {favoriteMovies.map((m, i) => <MovieCard key={m.id} movie={m} index={i} />)}
             </div>
           </motion.div>
         )}
