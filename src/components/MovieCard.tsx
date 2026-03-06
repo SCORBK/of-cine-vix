@@ -2,6 +2,7 @@ import { Play, Heart, Eye, Flag, Share2, Film, Star } from "lucide-react";
 import { useState } from "react";
 import { useMovieLists } from "@/contexts/MovieListsContext";
 import ReportMovieModal from "@/components/ReportMovieModal";
+import VideoPlayerModal from "@/components/VideoPlayerModal";
 import type { DbMovie } from "@/types/movie";
 
 interface MovieCardProps {
@@ -12,6 +13,7 @@ interface MovieCardProps {
 const MovieCard = ({ movie, index }: MovieCardProps) => {
   const [isHovered, setIsHovered] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
+  const [playerOpen, setPlayerOpen] = useState(false);
   const { toggleFavorite, toggleWatched, isFavorite, isWatched } = useMovieLists();
 
   const fav = isFavorite(movie.id);
@@ -47,7 +49,8 @@ const MovieCard = ({ movie, index }: MovieCardProps) => {
 
           <div className={`absolute inset-0 flex flex-col justify-end p-3 transition-opacity duration-300 ${isHovered ? "opacity-100" : "opacity-0"}`}>
             <div className="flex items-center gap-2 mb-2">
-              <button className="w-8 h-8 rounded-full bg-primary flex items-center justify-center hover:bg-primary/80 transition-colors">
+              <button onClick={(e) => { e.stopPropagation(); setPlayerOpen(true); }}
+                className="w-8 h-8 rounded-full bg-primary flex items-center justify-center hover:bg-primary/80 transition-colors">
                 <Play className="w-4 h-4 text-primary-foreground fill-current" />
               </button>
               <button onClick={(e) => { e.stopPropagation(); toggleFavorite(movie.id); }}
@@ -92,6 +95,7 @@ const MovieCard = ({ movie, index }: MovieCardProps) => {
       </div>
 
       <ReportMovieModal movie={movie} open={reportOpen} onClose={() => setReportOpen(false)} />
+      <VideoPlayerModal movie={movie} open={playerOpen} onClose={() => setPlayerOpen(false)} />
     </>
   );
 };
