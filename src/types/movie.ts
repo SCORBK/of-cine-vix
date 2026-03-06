@@ -7,6 +7,7 @@ export interface DbMovie {
   rating: number | null;
   image_url: string | null;
   trailer_url: string | null;
+  content_type: string;
   created_at: string;
   updated_at: string;
 }
