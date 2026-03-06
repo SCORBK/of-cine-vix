@@ -62,6 +62,53 @@ export type Database = {
         }
         Relationships: []
       }
+      episodes: {
+        Row: {
+          created_at: string
+          description: string | null
+          duration: string | null
+          episode_number: number
+          id: string
+          movie_id: string
+          season_number: number
+          thumbnail_url: string | null
+          title: string
+          video_url: string | null
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          duration?: string | null
+          episode_number?: number
+          id?: string
+          movie_id: string
+          season_number?: number
+          thumbnail_url?: string | null
+          title: string
+          video_url?: string | null
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          duration?: string | null
+          episode_number?: number
+          id?: string
+          movie_id?: string
+          season_number?: number
+          thumbnail_url?: string | null
+          title?: string
+          video_url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "episodes_movie_id_fkey"
+            columns: ["movie_id"]
+            isOneToOne: false
+            referencedRelation: "movies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       followers: {
         Row: {
           created_at: string
@@ -85,6 +132,7 @@ export type Database = {
       }
       movies: {
         Row: {
+          content_type: string
           created_at: string
           description: string | null
           genre: string | null
@@ -97,6 +145,7 @@ export type Database = {
           year: number | null
         }
         Insert: {
+          content_type?: string
           created_at?: string
           description?: string | null
           genre?: string | null
@@ -109,6 +158,7 @@ export type Database = {
           year?: number | null
         }
         Update: {
+          content_type?: string
           created_at?: string
           description?: string | null
           genre?: string | null
